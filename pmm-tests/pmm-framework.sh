@@ -18,6 +18,8 @@ OUSER="admin"
 OPASS="passw0rd"
 ADDR="127.0.0.1"
 download_link=0
+disable_ssl=0
+create_pgsql_user=0
 
 mkdir -p $WORKDIR/logs
 # User configurable variables
@@ -27,50 +29,55 @@ IS_BATS_RUN=0
 usage () {
   echo "Usage: [ options ]"
   echo "Options:"
-  echo " --setup                          This will setup and configure a PMM server"
-  echo " --addclient=ps,2                 Add Percona (ps), MySQL (ms), MariaDB (md), Percona XtraDB Cluster (pxc), and/or mongodb (mo) pmm-clients to the currently live PMM server (as setup by --setup)"
-  echo "                                  You can add multiple client instances simultaneously. eg : --addclient=ps,2  --addclient=ms,2 --addclient=md,2 --addclient=mo,2 --addclient=pxc,3"
-  echo " --download                       This will help us to download pmm client binary tar balls"
-  echo " --pmm-server-version             Pass PMM version"
-  echo " --pmm-port                       Pass port for PMM docker"
-  echo " --ps-version                     Pass Percona Server version info"
-  echo " --ms-version                     Pass MySQL Server version info"
-  echo " --md-version                     Pass MariaDB Server version info"
-  echo " --pxc-version                    Pass Percona XtraDB Cluster version info"
-  echo " --mysqld-startup-options         Pass MySQL startup options. eg : --mysqld-startup-options='--innodb_buffer_pool_size=1G --innodb_log_file_size=1G'"
-  echo " --with-proxysql                  This allow to install PXC with proxysql"
-  echo " --sysbench-data-load             This will initiate sysbench data load on mysql instances"
-  echo " --sysbench-oltp-run              This will initiate sysbench oltp run on mysql instances"
-  echo " --storage-engine                 This will create sysbench tables with specific storage engine"
-  echo " --mo-version                     Pass MongoDB Server version info"
-  echo " --mongo-with-rocksdb             This will start mongodb with rocksdb engine"
-  echo " --replcount                      You can configure multiple mongodb replica sets with this oprion"
-  echo " --with-replica                   This will configure mongodb replica setup"
-  echo " --with-shrading                  This will configure mongodb shrading setup"
-  echo " --add-docker-client              Add docker pmm-clients with percona server to the currently live PMM server"
-  echo " --list                           List all client information as obtained from pmm-admin"
-  echo " --wipe-clients                   This will stop all client instances and remove all clients from pmm-admin"
-  echo " --wipe-docker-clients            This will stop all docker client instances and remove all clients from docker container"
-  echo " --wipe-server                    This will stop pmm-server container and remove all pmm containers"
-  echo " --wipe                           This will wipe all pmm configuration"
-  echo " --dev                            When this option is specified, PMM framework will use the latest PMM development version. Otherwise, the latest 1.0.x version is used"
-  echo " --pmm-server-username            User name to access the PMM Server web interface"
-  echo " --pmm-server-password            Password to access the PMM Server web interface"
-  echo " --pmm-server-memory              Set METRICS_MEMORY option to PMM server"
-  echo " --pmm-docker-memory              Set memory for docker container"
-  echo " --pmm-server=[docker|ami|ova]    Choose PMM server appliance, default pmm server appliance is docker"
-  echo " --ami-image                      Pass PMM server ami image name"
-  echo " --key-name                       Pass your aws access key file name"
-  echo " --ova-image                      Pass PMM server ova image name"
-  echo " --ova-memory                     Pass memory(memorysize in MB) for OVA virtual box"
-  echo " --upgrade 			    When this option is specified, PMM framework will be updated to specified version"
-  echo " --compare-query-count            This will help us to compare the query count between PMM client instance and PMM QAN/Metrics page"
+  echo " --setup                        This will setup and configure a PMM server"
+  echo " --addclient=ps,2               Add Percona (ps), MySQL (ms), MariaDB (md), Percona XtraDB Cluster (pxc), and/or mongodb (mo) pmm-clients to the currently live PMM server (as setup by --setup)"
+  echo "                                You can add multiple client instances simultaneously. eg : --addclient=ps,2  --addclient=ms,2 --addclient=md,2 --addclient=mo,2 --addclient=pxc,3"
+  echo " --download                     This will help us to download pmm client binary tar balls"
+  echo " --pmm-server-version           Pass PMM version"
+  echo " --pmm-port                     Pass port for PMM docker"
+  echo " --ps-version                   Pass Percona Server version info"
+  echo " --ms-version                   Pass MySQL Server version info"
+  echo " --pgsql-version                Pass Postgre SQL server version Info"
+  echo " --md-version                   Pass MariaDB Server version info"
+  echo " --pxc-version                  Pass Percona XtraDB Cluster version info"
+  echo " --mysqld-startup-options       Pass MySQL startup options. eg : --mysqld-startup-options='--innodb_buffer_pool_size=1G --innodb_log_file_size=1G'"
+  echo " --with-proxysql                This allow to install PXC with proxysql"
+  echo " --sysbench-data-load           This will initiate sysbench data load on mysql instances"
+  echo " --sysbench-oltp-run            This will initiate sysbench oltp run on mysql instances"
+  echo " --storage-engine               This will create sysbench tables with specific storage engine"
+  echo " --mo-version                   Pass MongoDB Server version info"
+  echo " --mongo-with-rocksdb           This will start mongodb with rocksdb engine"
+  echo " --replcount                    You can configure multiple mongodb replica sets with this oprion"
+  echo " --with-replica                 This will configure mongodb replica setup"
+  echo " --with-shrading                This will configure mongodb shrading setup"
+  echo " --add-docker-client            Add docker pmm-clients with percona server to the currently live PMM server"
+  echo " --list                         List all client information as obtained from pmm-admin"
+  echo " --wipe-clients                 This will stop all client instances and remove all clients from pmm-admin"
+  echo " --wipe-docker-clients          This will stop all docker client instances and remove all clients from docker container"
+  echo " --wipe-server                  This will stop pmm-server container and remove all pmm containers"
+  echo " --wipe                         This will wipe all pmm configuration"
+  echo " --dev                          When this option is specified, PMM framework will use the latest PMM development version. Otherwise, the latest 1.0.x version is used"
+  echo " --pmm-server-username          User name to access the PMM Server web interface"
+  echo " --pmm-server-password          Password to access the PMM Server web interface"
+  echo " --pmm-server-memory            Set METRICS_MEMORY option to PMM server"
+  echo " --pmm-docker-memory            Set memory for docker container"
+  echo " --pmm-server=[docker|ami|ova]  Choose PMM server appliance, default pmm server appliance is docker"
+  echo " --ami-image                    Pass PMM server ami image name"
+  echo " --key-name                     Pass your aws access key file name"
+  echo " --ova-image                    Pass PMM server ova image name"
+  echo " --ova-memory                   Pass memory(memorysize in MB) for OVA virtual box"
+  echo " --disable-ssl                  Disable ssl mode on exporter"
+  echo " --create-pgsql-user            Set this option if a Dedicated PGSQl User creation is required username: psql and no password"
+  echo " --upgrade-server               When this option is specified, PMM Server will be updated to the last version"
+  echo " --upgrade-client          		  When this option is specified, PMM client will be updated to the last version"
+  echo " --query-source                 Set query source (perfschema or slowlog)"
+  echo " --compare-query-count          This will help us to compare the query count between PMM client instance and PMM QAN/Metrics page"
 }
 
 # Check if we have a functional getopt(1)
 if ! getopt --test
   then
-  go_out="$(getopt --options=u: --longoptions=addclient:,replcount:,pmm-server:,ami-image:,key-name:,ova-image:,ova-memory:,pmm-server-version:,pmm-port:,pmm-server-memory:,pmm-docker-memory:,pmm-server-username:,pmm-server-password:,setup,with-replica,with-shrading,download,ps-version:,ms-version:,md-version:,pxc-version:,mysqld-startup-options:,mo-version:,mongo-with-rocksdb,add-docker-client,list,wipe-clients,wipe-docker-clients,wipe-server,upgrade,wipe,dev,with-proxysql,sysbench-data-load,sysbench-oltp-run,storage-engine:,compare-query-count,help \
+  go_out="$(getopt --options=u: --longoptions=addclient:,replcount:,pmm-server:,ami-image:,key-name:,ova-image:,ova-memory:,pmm-server-version:,pmm-port:,pmm-server-memory:,pmm-docker-memory:,pmm-server-username:,pmm-server-password:,query-source:,setup,with-replica,with-shrading,download,ps-version:,ms-version:,pgsql-version:,md-version:,pxc-version:,mysqld-startup-options:,mo-version:,mongo-with-rocksdb,add-docker-client,list,wipe-clients,wipe-docker-clients,wipe-server,disable-ssl,create-pgsql-user,upgrade-server,upgrade-client,wipe,dev,with-proxysql,sysbench-data-load,sysbench-oltp-run,storage-engine:,compare-query-count,help \
   --name="$(basename "$0")" -- "$@")"
   test $? -eq 0 || exit 1
   eval set -- $go_out
@@ -135,7 +142,7 @@ do
     ami_image="$2"
     shift 2
     ;;
-	--key-name )
+    --key-name )
     key_name="$2"
     shift 2
     ;;
@@ -155,6 +162,10 @@ do
     ms_version="$2"
     shift 2
     ;;
+    --pgsql-version )
+    pgsql_version="$2"
+    shift 2
+    ;;
     --md-version )
     md_version="$2"
     shift 2
@@ -165,6 +176,10 @@ do
     ;;
     --mysqld-startup-options )
     mysqld_startup_options="$2"
+    shift 2
+    ;;
+    --query-source )
+    query_source="$2"
     shift 2
     ;;
     --mo-version )
@@ -190,6 +205,14 @@ do
     --wipe-clients )
     shift
     wipe_clients=1
+    ;;
+    --disable-ssl )
+    shift
+    disable_ssl=1
+    ;;
+    --create-pgsql-user )
+    shift
+    create_pgsql_user=1
     ;;
     --wipe-docker-clients )
     shift
@@ -227,8 +250,12 @@ do
     shift
     compare_query_count=1
     ;;
-    --upgrade )
-    upgrade=1
+    --upgrade-server )
+    upgrade_server=1
+    shift
+    ;;
+    --upgrade-client )
+    upgrade_client=1
     shift
     ;;
     --pmm-server-username )
@@ -284,6 +311,14 @@ if [[ -z "$storage_engine" ]];then
   storage_engine=INNODB
 fi
 
+if [[ -z "$disable_ssl" ]];then
+  disable_ssl=0
+fi
+
+if [[ -z "$create_pgsql_user" ]]; then
+  create_pgsql_user=0
+fi
+
 if [[ "$with_shrading" == "1" ]];then
   with_replica=1
 fi
@@ -320,6 +355,7 @@ elif [[ "$pmm_server" == "custom" ]];then
     exit 1
   fi
 fi
+
 sanity_check(){
   if [[ "$pmm_server" == "docker" ]];then
     if ! sudo docker ps | grep 'pmm-server' > /dev/null ; then
@@ -348,6 +384,21 @@ sanity_check(){
   fi
 }
 
+sudo_check(){
+
+  USER=$1
+    # Sudo check
+    echo "Checking for user $1"
+  if [ "$(sudo -H -u ${USER} bash -c "echo 'test'" 2>/dev/null)" != "test" ]; then
+    echo "Error: sudo is not available or requires a password. This script needs to be able to use sudo, without password, from the userID that invokes it ($(whoami))"
+    echo "To get your setup correct, you may like to use a tool like visudo (use 'sudo visudo' or 'su' and then 'visudo') and consider adding the following line to the file:"
+    echo "$(whoami)   ALL=(ALL)      NOPASSWD:ALL"
+    echo "If you do not have sudo installed yet, try 'su' and then 'yum install sudo' or the apt-get equivalent"
+    echo "Terminating now."
+    exit 1
+  fi
+}
+
 if [[ -z "${ps_version}" ]]; then ps_version="5.7"; fi
 if [[ -z "${pxc_version}" ]]; then pxc_version="5.7"; fi
 if [[ -z "${ms_version}" ]]; then ms_version="8.0"; fi
@@ -355,6 +406,11 @@ if [[ -z "${md_version}" ]]; then md_version="10.2"; fi
 if [[ -z "${mo_version}" ]]; then mo_version="3.4"; fi
 if [[ -z "${REPLCOUNT}" ]]; then REPLCOUNT="1"; fi
 if [[ -z "${ova_memory}" ]]; then ova_memory="2048";fi
+if [[ -z "${pgsql_version}" ]]; then pgsql_version="10.5";fi
+
+if [[ -z "$query_source" ]];then
+  query_source=perfschema
+fi
 
 setup(){
   if [ $IS_BATS_RUN -eq 0 ];then
@@ -363,11 +419,17 @@ setup(){
       y|Y)
         echo -e "\nGenerating SSL certificate files to protect PMM from unauthorized access"
         openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout server.key -out server.crt -subj '/CN=www.percona.com/O=Database Performance./C=US'
-         IS_SSL="Yes"
+        IS_SSL="Yes"
+        if [[ -z $PMM_PORT ]]; then
+          PMM_PORT=443
+        fi
       ;;
       n|N)
         echo ""
         IS_SSL="No"
+        if [[ -z $PMM_PORT ]]; then
+          PMM_PORT=80
+        fi
       ;;
       *)
         echo "Please type [y/n]! Terminating."
@@ -378,12 +440,13 @@ setup(){
     IS_SSL="No"
   fi
 
+  
   if [[ ! -e $(which lynx 2> /dev/null) ]] ;then
     echo "ERROR! The program 'lynx' is currently not installed. Please install lynx. Terminating"
     exit 1
   fi
   #IP_ADDRESS=$(ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
-  IP_ADDRESS=$(ip route get 8.8.8.8 | head -1 | awk 'NF>1{print $NF}')
+  IP_ADDRESS=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
   if [[ "$pmm_server" == "docker" ]];then
     #PMM configuration setup
     if [ -z $pmm_server_version ]; then
@@ -422,13 +485,13 @@ setup(){
     fi
     if [ -z $dev ]; then
       if [ "$IS_SSL" == "Yes" ];then
-        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY  -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server -v $WORKDIR:/etc/nginx/ssl  --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
+        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY  -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
       else
        sudo docker run -d -p $PMM_PORT:80 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
       fi
     else
       if [ "$IS_SSL" == "Yes" ];then
-       sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server -v $WORKDIR:/etc/nginx/ssl  --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
+       sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
       else
        sudo docker run -d -p $PMM_PORT:80 -p 8500:8500 $DOCKER_CONTAINER_MEMORY $PMM_METRICS_MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
       fi
@@ -618,7 +681,11 @@ get_basedir(){
         BASE_TAR=$(ls -1td $SERVER_STRING 2>/dev/null | grep ".tar" | head -n1)
         if [ ! -z $BASE_TAR ];then
           tar -xzf $BASE_TAR
-          BASEDIR=$(ls -1td $SERVER_STRING 2>/dev/null | grep -v ".tar" | head -n1)
+          if [[ "${PRODUCT_NAME}" == "postgresql" ]]; then
+            BASEDIR=$(ls -1td pgsql 2>/dev/null | grep -v ".tar" | head -n1)
+          else
+            BASEDIR=$(ls -1td $SERVER_STRING 2>/dev/null | grep -v ".tar" | head -n1)
+          fi
           BASEDIR="$WORKDIR/$BASEDIR"
           rm -rf $BASEDIR/node*
         else
@@ -638,7 +705,11 @@ get_basedir(){
       BASE_TAR=$(ls -1td $SERVER_STRING 2>/dev/null | grep ".tar" | head -n1)
       if [ ! -z $BASE_TAR ];then
         tar -xzf $BASE_TAR
-        BASEDIR=$(ls -1td $SERVER_STRING 2>/dev/null | grep -v ".tar" | head -n1)
+        if [[ "${PRODUCT_NAME}" == "postgresql" ]]; then
+            BASEDIR=$(ls -1td pgsql 2>/dev/null | grep -v ".tar" | head -n1)
+        else
+          BASEDIR=$(ls -1td $SERVER_STRING 2>/dev/null | grep -v ".tar" | head -n1)
+        fi
         BASEDIR="$WORKDIR/$BASEDIR"
         if [[ "${CLIENT_NAME}" == "mo" ]]; then
           sudo rm -rf $BASEDIR/data
@@ -674,7 +745,11 @@ compare_query(){
   #BASEDIR="/home/ramesh/pmmwork/ps57"
   TEST_SOCKET=$(sudo pmm-admin list | grep "mysql:metrics[ \t].*_NODE-" | head -1 | awk -F[\(\)] '{print $2}')
   TEST_NODE_NAME=$(sudo pmm-admin list | grep "mysql:metrics[ \t].*_NODE-" | head -1  | awk '{print $2}')
-  sudo pmm-admin add mysql --user=root --socket=$TEST_SOCKET SHADOW_NODE
+  if [ $disable_ssl -eq 1 ]; then
+    sudo pmm-admin add mysql --user=root --socket=$TEST_SOCKET SHADOW_NODE --disable-ssl
+  else
+    sudo pmm-admin add mysql --user=root --socket=$TEST_SOCKET SHADOW_NODE
+  fi
   if [ -z $TEST_SOCKET ];then
     echo "ERROR! PMM client instance does not exist. Terminating"
 	exit 1
@@ -714,6 +789,18 @@ compare_query(){
   echo "Please compare these query count with QAN/Metrics webpage"
 }
 
+check_disable_ssl(){
+  EXPORTER_NAME=$1
+  echo ${EXPORTER_NAME}
+  PMM_OUTPUT=$(sudo pmm-admin list | grep ${EXPORTER_NAME} | grep 'scheme=http')
+  if [ ! -z "$PMM_OUTPUT" ]; then
+    echo "SSL Disabled Succcesfully for" ${EXPORTER_NAME}
+  else
+    echo "Could not disable_ssl Please check again"
+    exit 1;
+  fi
+}
+
 #Percona Server configuration.
 add_clients(){
   mkdir -p $WORKDIR/logs
@@ -734,6 +821,10 @@ add_clients(){
       NODE_NAME="MS_NODE"
       get_basedir mysql "mysql-${ms_version}*" "MySQL Server binary tar ball" ${ms_version}
       MYSQL_CONFIG="--init-file ${SCRIPT_PWD}/QRT_Plugin.sql --innodb_monitor_enable=all --performance_schema=ON"
+    elif [[ "${CLIENT_NAME}" == "pgsql" ]]; then
+      PORT_CHECK=501
+      NODE_NAME="PGSQL_NODE"
+      get_basedir postgresql "postgresql-${pgsql_version}*" "Postgre SQL Binary tar ball" ${pgsql_version}
     elif [[ "${CLIENT_NAME}" == "md" ]]; then
       PORT_CHECK=301
       NODE_NAME="MD_NODE"
@@ -747,9 +838,10 @@ add_clients(){
     elif [[ "${CLIENT_NAME}" == "mo" ]]; then
       get_basedir psmdb "percona-server-mongodb-${mo_version}*" "Percona Server Mongodb binary tar ball" ${mo_version}
     fi
-    if [[ "${CLIENT_NAME}" != "md"  && "${CLIENT_NAME}" != "mo" ]]; then
-      if [ "$(${BASEDIR}/bin/mysqld --version | grep -oe '5\.[567]' | head -n1)" == "5.7" ]; then
-        MID="${BASEDIR}/bin/mysqld --no-defaults --initialize-insecure --basedir=${BASEDIR}"
+    if [[ "${CLIENT_NAME}" != "md"  && "${CLIENT_NAME}" != "mo" && "${CLIENT_NAME}" != "pgsql" ]]; then
+      VERSION="$(${BASEDIR}/bin/mysqld --version | grep -oe '[58]\.[5670]' | head -n1)"
+    if [ "$VERSION" == "5.7" -o "$VERSION" == "8.0" ]; then
+        MID="${BASEDIR}/bin/mysqld   --default-authentication-plugin=mysql_native_password --initialize-insecure --basedir=${BASEDIR}"
       else
         MID="${BASEDIR}/scripts/mysql_install_db --no-defaults --basedir=${BASEDIR}"
       fi
@@ -762,29 +854,34 @@ add_clients(){
     ADDCLIENTS_COUNT=$(echo "${i}" | sed 's|[^0-9]||g')
     if  [[ "${CLIENT_NAME}" == "mo" ]]; then
       rm -rf $BASEDIR/data
-	  for k in `seq 1  ${REPLCOUNT}`;do
-		PSMDB_PORT=$(( (RANDOM%21 + 10) * 1001 ))
-		PSMDB_PORTS+=($PSMDB_PORT)
-        for j in `seq 1  ${ADDCLIENTS_COUNT}`;do
-          PORT=$(( $PSMDB_PORT + $j - 1 ))
-          mkdir -p ${BASEDIR}/data/rpldb${k}_${j}
-          $BASEDIR/bin/mongod --profile 2 --slowms 1  $mongo_storage_engine  --replSet r${k} --dbpath=$BASEDIR/data/rpldb${k}_${j} --logpath=$BASEDIR/data/rpldb${k}_${j}/mongod.log --port=$PORT --logappend --fork &
-		  sleep 10
-          sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_rpl${k}_${j}
-        done
+      for k in `seq 1  ${REPLCOUNT}`;do
+        PSMDB_PORT=$(( (RANDOM%21 + 10) * 1001 ))
+        PSMDB_PORTS+=($PSMDB_PORT)
+          for j in `seq 1  ${ADDCLIENTS_COUNT}`;do
+            PORT=$(( $PSMDB_PORT + $j - 1 ))
+            mkdir -p ${BASEDIR}/data/rpldb${k}_${j}
+            $BASEDIR/bin/mongod --profile 2 --slowms 1  $mongo_storage_engine  --replSet r${k} --dbpath=$BASEDIR/data/rpldb${k}_${j} --logpath=$BASEDIR/data/rpldb${k}_${j}/mongod.log --port=$PORT --logappend --fork &
+            sleep 10
+            if [ $disable_ssl -eq 1 ]; then
+              sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_rpl${k}_${j} --disable-ssl
+              check_disable_ssl mongodb_inst_rpl${k}_${j}
+            else
+              sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_rpl${k}_${j}
+            fi
+          done
       done
-	  create_replset_js(){
-	    REPLSET_COUNT=$(( ${ADDCLIENTS_COUNT} - 1 ))
-	    rm -rf /tmp/config_replset.js
-		echo "port=parseInt(db.adminCommand(\"getCmdLineOpts\").parsed.net.port)" >> /tmp/config_replset.js
-		for i in `seq 1  ${REPLSET_COUNT}`;do
+      create_replset_js(){
+        REPLSET_COUNT=$(( ${ADDCLIENTS_COUNT} - 1 ))
+        rm -rf /tmp/config_replset.js
+        echo "port=parseInt(db.adminCommand(\"getCmdLineOpts\").parsed.net.port)" >> /tmp/config_replset.js
+        for i in `seq 1  ${REPLSET_COUNT}`;do
           echo "port${i}=port+${i};" >> /tmp/config_replset.js
-		done
+        done
         echo "conf = {" >> /tmp/config_replset.js
         echo "_id : replSet," >> /tmp/config_replset.js
         echo "members: [" >> /tmp/config_replset.js
         echo "  { _id:0 , host:\"localhost:\"+port,priority:10}," >> /tmp/config_replset.js
-		for i in `seq 1  ${REPLSET_COUNT}`;do
+        for i in `seq 1  ${REPLSET_COUNT}`;do
           echo "  { _id:${i} , host:\"localhost:\"+port${i}}," >> /tmp/config_replset.js
         done
         echo "  ]" >> /tmp/config_replset.js
@@ -792,50 +889,101 @@ add_clients(){
 
         echo "printjson(conf)" >> /tmp/config_replset.js
         echo "printjson(rs.initiate(conf));" >> /tmp/config_replset.js
-
-	  }
-	  create_replset_js
+  	  }
+	    create_replset_js
       if [[ "$with_replica" == "1" ]]; then
         for k in `seq 1  ${REPLCOUNT}`;do
-	      n=$(( $k - 1 ))
-		  echo "Configuring replcaset"
+	        n=$(( $k - 1 ))
+		      echo "Configuring replcaset"
           sudo $BASEDIR/bin/mongo --quiet --port ${PSMDB_PORTS[$n]} --eval "var replSet='r${k}'" "/tmp/config_replset.js"
           sleep 5
-	    done
-	  fi
+	      done
+	    fi
 
       if [[ "$with_shrading" == "1" ]]; then
-    	#config
-	    CONFIG_MONGOD_PORT=$(( (RANDOM%21 + 10) * 1001 ))
-		CONFIG_MONGOS_PORT=$(( (RANDOM%21 + 10) * 1001 ))
-		for m in `seq 1 ${ADDCLIENTS_COUNT}`;do
-		  PORT=$(( $CONFIG_MONGOD_PORT + $m - 1 ))
-		  mkdir -p $BASEDIR/data/confdb${m}
+    	  #config
+        CONFIG_MONGOD_PORT=$(( (RANDOM%21 + 10) * 1001 ))
+        CONFIG_MONGOS_PORT=$(( (RANDOM%21 + 10) * 1001 ))
+        for m in `seq 1 ${ADDCLIENTS_COUNT}`;do
+          PORT=$(( $CONFIG_MONGOD_PORT + $m - 1 ))
+          mkdir -p $BASEDIR/data/confdb${m}
           $BASEDIR/bin/mongod --profile 2 --slowms 1 --fork --logpath $BASEDIR/data/confdb${m}/config_mongo.log --dbpath=$BASEDIR/data/confdb${m} --port $PORT --configsvr --replSet config &
-		  sleep 10
-		  sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_config_rpl${m}
-		  MONGOS_STARTUP_CMD="localhost:$PORT,$MONGOS_STARTUP_CMD"
-		done
+          sleep 10
+          if [ $disable_ssl -eq 1 ]; then
+            sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_config_rpl${m} --disable-ssl
+            check_disable_ssl mongodb_inst_rpl${k}_${j}
+          else
+            sudo pmm-admin add mongodb --cluster mongodb_cluster  --uri localhost:$PORT mongodb_inst_config_rpl${m}
+          fi
+          MONGOS_STARTUP_CMD="localhost:$PORT,$MONGOS_STARTUP_CMD"
+        done
 
-		echo "Configuring replcaset"
+        echo "Configuring replcaset"
         $BASEDIR/bin/mongo --quiet --port ${CONFIG_MONGOD_PORT} --eval "var replSet='config'" "/tmp/config_replset.js"
         sleep 20
 
-		MONGOS_STARTUP_CMD="${MONGOS_STARTUP_CMD::-1}"
-		mkdir $BASEDIR/data/mongos
-		#Removing default mongodb socket file
-		sudo rm -rf /tmp/mongodb-27017.sock
-		$BASEDIR/bin/mongos --fork --logpath $BASEDIR/data/mongos/mongos.log --configdb config/$MONGOS_STARTUP_CMD  &
-		sleep 5
-        sudo pmm-admin add mongodb --cluster mongodb_cluster --uri localhost:$CONFIG_MONGOD_PORT mongod_config_inst
-	    sudo pmm-admin add mongodb --cluster mongodb_cluster --uri localhost:$CONFIG_MONGOS_PORT mongos_config_inst
+        MONGOS_STARTUP_CMD="${MONGOS_STARTUP_CMD::-1}"
+        mkdir $BASEDIR/data/mongos
+        #Removing default mongodb socket file
+        sudo rm -rf /tmp/mongodb-27017.sock
+        $BASEDIR/bin/mongos --fork --logpath $BASEDIR/data/mongos/mongos.log --configdb config/$MONGOS_STARTUP_CMD  &
+        sleep 5
+        if [ $disable_ssl -eq 1 ]; then
+          sudo pmm-admin add mongodb --cluster mongodb_cluster --uri localhost:$CONFIG_MONGOD_PORT mongod_config_inst --disable-ssl
+        else
+          sudo pmm-admin add mongodb --cluster mongodb_cluster --uri localhost:$CONFIG_MONGOS_PORT mongos_config_inst
+        fi
         echo "Adding Shards"
-		sleep 20
+		    sleep 20
         for k in `seq 1  ${REPLCOUNT}`;do
           n=$(( $k - 1 ))
           $BASEDIR/bin/mongo --quiet --eval "printjson(db.getSisterDB('admin').runCommand({addShard: 'r${k}/localhost:${PSMDB_PORTS[$n]}'}))"
         done
-	  fi
+	    fi
+    elif [[ "${CLIENT_NAME}" == "pgsql" ]]; then
+      if [ $create_pgsql_user -eq 1 ]; then
+        PGSQL_USER=psql
+        echo "Creating postgresql Dedicated User psql"
+        if id psql >/dev/null 2>&1; then
+          echo "yes the user psql exists"
+        else
+          echo "No, the user psql does not exist, Adding"
+          sudo adduser --disabled-password --gecos "" psql
+        fi
+      else
+        PGSQL_USER=nobody
+      fi
+      PGSQL_PORT=5431
+      cd ${BASEDIR}/..
+      result=pgsql
+      sudo cp -u -R ${result} /home/
+      BASEDIR=/home/pgsql
+      cd ${BASEDIR}/bin
+      sudo chmod +x .
+      for j in `seq 1  ${ADDCLIENTS_COUNT}`;do
+        PGSQL_PORT=$((PGSQL_PORT+j))
+        echo "Current Path is $(pwd)"
+        if [ -d ${BASEDIR}/${NODE_NAME}_${j}/data ]; then
+          echo "PGSQL Data Directory Exist, Removing old Directory, Stopping already running Server and creating a new one"
+          sudo -H -u ${PGSQL_USER} bash -c "./pg_ctl -D ${BASEDIR}/${NODE_NAME}_${j}/data -l ${BASEDIR}/${NODE_NAME}_${j}/data/logfile -o '-F -p ${PGSQL_PORT}' stop" > /dev/null 2>&1;
+          sudo rm -r ${BASEDIR}/${NODE_NAME}_${j}
+          sudo mkdir -p ${BASEDIR}/${NODE_NAME}_${j}/data
+        else
+          sudo mkdir -p ${BASEDIR}/${NODE_NAME}_${j}/data
+        fi
+        sudo_check ${PGSQL_USER}
+        sudo chown -R ${PGSQL_USER} ${BASEDIR}/${NODE_NAME}_${j}/data
+        echo "Starting PGSQL server at port ${PGSQL_PORT}"
+        sudo -H -u ${PGSQL_USER} bash -c "./initdb -D ${BASEDIR}/${NODE_NAME}_${j}/data --username=postgres" > /dev/null 2>&1;
+        sudo -H -u ${PGSQL_USER} bash -c "./pg_ctl -D ${BASEDIR}/${NODE_NAME}_${j}/data -l ${BASEDIR}/${NODE_NAME}_${j}/data/logfile -o '-F -p ${PGSQL_PORT}' start" > /dev/null 2>&1;
+        sudo -H -u ${PGSQL_USER} bash -c "./createdb psql --username=postgres"
+        if [ $disable_ssl -eq 1 ]; then
+          sudo pmm-admin add postgresql --user postgres --host localhost --port ${PGSQL_PORT} --disable-ssl PGSQL-${NODE_NAME}-${j}
+          check_disable_ssl PGSQL-${NODE_NAME}-${j}
+        else
+          sudo pmm-admin add postgresql --user postgres --host localhost --port ${PGSQL_PORT} PGSQL-${NODE_NAME}-${j}
+        fi
+      done
     else
       if [ -r ${BASEDIR}/lib/mysql/plugin/ha_tokudb.so ]; then
         TOKUDB_STARTUP="--plugin-load-add=tokudb=ha_tokudb.so --tokudb-check-jemalloc=0"
@@ -854,11 +1002,17 @@ add_clients(){
         if ${BASEDIR}/bin/mysqladmin -uroot -S/tmp/${NODE_NAME}_${j}.sock ping > /dev/null 2>&1; then
           echo "WARNING! Another mysqld process using /tmp/${NODE_NAME}_${j}.sock"
           if ! sudo pmm-admin list | grep "/tmp/${NODE_NAME}_${j}.sock" > /dev/null ; then
-            sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=perfschema
+            if [ $disable_ssl -eq 1 ]; then
+              sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=$query_source --disable-ssl
+              check_disable_ssl ${NODE_NAME}-${j}
+            else
+              sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=$query_source
+            fi
           fi
           continue
         fi
-        if [ "$(${BASEDIR}/bin/mysqld --version | grep -oe '5\.[567]' | head -n1)" != "5.7" ]; then
+        VERSION="$(${BASEDIR}/bin/mysqld --version | grep -oe '[58]\.[5670]' | head -n1)"
+        if [ "$VERSION" == "5.7" -o "$VERSION" == "8.0" ]; then
           mkdir -p $node
           ${MID} --datadir=$node  > ${BASEDIR}/startup_node$j.err 2>&1
         else
@@ -924,7 +1078,12 @@ add_clients(){
             exit 1
           fi
         fi
-        sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=perfschema
+        if [ $disable_ssl -eq 1 ]; then
+          sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=$query_source --disable-ssl
+          check_disable_ssl ${NODE_NAME}-${j}
+        else
+          sudo pmm-admin add mysql ${NODE_NAME}-${j} --socket=/tmp/${NODE_NAME}_${j}.sock --user=root --query-source=$query_source
+        fi
       done
       pxc_proxysql_setup(){
         if  [[ "${CLIENT_NAME}" == "pxc" ]]; then
@@ -946,7 +1105,11 @@ add_clients(){
           ${BASEDIR}/bin/mysql -uroot --socket=$PXC_SOCKET -e"grant all on *.* to admin@'%' identified by 'admin'"
           sudo sed -i "s/3306/${PXC_BASE_PORT}/" /etc/proxysql-admin.cnf
           sudo proxysql-admin -e > $WORKDIR/logs/proxysql-admin.log
-          sudo pmm-admin add proxysql:metrics
+          if [ $disable_ssl -eq 1 ]; then
+            sudo pmm-admin add proxysql:metrics --disable-ssl
+          else
+            sudo pmm-admin add proxysql:metrics
+          fi
         else
           echo "Could not find PXC nodes. Skipping proxysql setup"
         fi
@@ -987,10 +1150,10 @@ pmm_docker_client_startup(){
       sleep 5 ;
     done
     DOCKER_CONTAINER_NAME=$(docker ps | grep ${BASE_DIR}_centos_ps | awk '{print $NF}')
-    IP_ADD=$(ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+    IP_ADD=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
     if [ ! -z $DOCKER_CONTAINER_NAME ]; then
       echo -e "\nAdding pmm-client instance from CentOS docker container to the currently live PMM server"
-      IP_DOCKER_ADD=$(docker exec -it $DOCKER_CONTAINER_NAME ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+      IP_DOCKER_ADD=$(docker exec -it $DOCKER_CONTAINER_NAME ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
       docker exec -it $DOCKER_CONTAINER_NAME pmm-admin config --server $IP_ADD --bind-address $IP_DOCKER_ADD
       docker exec -it $DOCKER_CONTAINER_NAME pmm-admin add mysql
     fi
@@ -1026,10 +1189,10 @@ pmm_docker_client_startup(){
       sleep 5 ;
     done
     DOCKER_CONTAINER_NAME=$(docker ps | grep ${BASE_DIR}_ubuntu_ps | awk '{print $NF}')
-    IP_ADD=$(ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+    IP_ADD=$(ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
     if [ ! -z $DOCKER_CONTAINER_NAME ]; then
       echo -e "\nAdding pmm-client instance from Ubuntu docker container to the currently live PMM server"
-      IP_DOCKER_ADD=$(docker exec -it $DOCKER_CONTAINER_NAME ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
+      IP_DOCKER_ADD=$(docker exec -it $DOCKER_CONTAINER_NAME ip route get 8.8.8.8 | awk -F"src " 'NR==1{split($2,a," ");print a[1]}')
       docker exec -it $DOCKER_CONTAINER_NAME pmm-admin config --server $IP_ADD --bind-address $IP_DOCKER_ADD
       docker exec -it $DOCKER_CONTAINER_NAME pmm-admin add mysql
     fi
@@ -1118,13 +1281,13 @@ upgrade_server(){
     sudo docker rm pmm-server 2&> /dev/null
     if [ -z $dev ]; then
       if [ "$IS_SSL" == "Yes" ];then
-        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 -e METRICS_MEMORY=$MEMORY  -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server -v $WORKDIR:/etc/nginx/ssl  --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
+        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 -e METRICS_MEMORY=$MEMORY  -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
       else
         sudo docker run -d -p $PMM_PORT:80 -p 8500:8500 -e METRICS_MEMORY=$MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always percona/pmm-server:$PMM_VERSION 2>/dev/null
       fi
     else
       if [ "$IS_SSL" == "Yes" ];then
-        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 -e METRICS_MEMORY=$MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server -v $WORKDIR:/etc/nginx/ssl  --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
+        sudo docker run -d -p $PMM_PORT:443 -p 8500:8500 -e METRICS_MEMORY=$MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
       else
         sudo docker run -d -p $PMM_PORT:80 -p 8500:8500 -e METRICS_MEMORY=$MEMORY -e SERVER_USER="$pmm_server_username" -e SERVER_PASSWORD="$pmm_server_password" -e ORCHESTRATOR_USER=$OUSER -e ORCHESTRATOR_PASSWORD=$OPASS --volumes-from pmm-data --name pmm-server --restart always perconalab/pmm-server:$PMM_VERSION 2>/dev/null
       fi
@@ -1139,7 +1302,21 @@ upgrade_server(){
 
 upgrade_client(){
   #Install new pmm-client
-  echo "Installing new pmm-client..."
+  echo "Installing new pmm-client tarball from TESTING directory..."
+  PMM_CLIENT_TARBALL_URL=$(lynx --listonly --dump https://www.percona.com/downloads/TESTING/pmm/ | grep  "pmm-client" |awk '{print $2}'| grep "tar.gz" | head -n1)
+  echo "PMM client tarball $PMM_CLIENT_TARBALL_URL"
+  wget $PMM_CLIENT_TARBALL_URL
+  PMM_CLIENT_TAR=$(echo $PMM_CLIENT_TARBALL_URL | grep -o '[^/]*$')
+  tar -xzf $PMM_CLIENT_TAR
+  PMM_CLIENT_BASEDIR=$(ls -1td pmm-client-* 2>/dev/null | grep -v ".tar" | head -n1)
+  pushd $PMM_CLIENT_BASEDIR > /dev/null
+  sudo ./install
+  popd > /dev/null
+  if [[ $(sudo pmm-admin list |grep metrics) ]]; then
+    echo "Upgrade client has been finished successfully"
+  else
+    echo "There is no any instances, please check pmm-admin list output"
+  fi
 }
 
 sysbench_prepare(){
@@ -1155,8 +1332,9 @@ sysbench_prepare(){
   #Initiate sysbench data load on all mysql client instances
   for i in $(sudo pmm-admin list | grep "mysql:metrics[ \t].*_NODE-" | awk -F[\(\)] '{print $2}'  | sort -r) ; do
     DB_NAME=$(echo ${i}  | awk -F[\/\.] '{print $3}')
+	DB_NAME="${DB_NAME}_${storage_engine}"
     $MYSQL_CLIENT --user=root --socket=${i} -e "drop database if exists ${DB_NAME};create database ${DB_NAME};"
-    sysbench /usr/share/sysbench/oltp_insert.lua --table-size=100000 --tables=16 --mysql-db=${DB_NAME} --mysql-user=root --mysql-storage-engine=$storage_engine  --threads=16 --db-driver=mysql --mysql-socket=${i} prepare  > $WORKDIR/logs/sysbench_prepare_${DB_NAME}.txt 2>&1
+    sysbench /usr/share/sysbench/oltp_insert.lua --table-size=10000 --tables=16 --mysql-db=${DB_NAME} --mysql-user=root --mysql-storage-engine=$storage_engine  --threads=16 --db-driver=mysql --mysql-socket=${i} prepare  > $WORKDIR/logs/sysbench_prepare_${DB_NAME}.txt 2>&1
     check_script $? "Failed to run sysbench dataload"
   done
 }
@@ -1165,7 +1343,8 @@ sysbench_run(){
   #Initiate sysbench oltp run on all mysql client instances
   for i in $(sudo pmm-admin list | grep "mysql:metrics[ \t].*_NODE-" | awk -F[\(\)] '{print $2}'  | sort -r) ; do
     DB_NAME=$(echo ${i}  | awk -F[\/\.] '{print $3}')
-    sysbench /usr/share/sysbench/oltp_read_write.lua --table-size=100000 --tables=16 --mysql-db=${DB_NAME} --mysql-user=root  --mysql-storage-engine=$storage_engine --threads=16 --time=1200 --report-interval=1 --events=1870000000 --db-driver=mysql --db-ps-mode=disable --mysql-socket=${i} run  > $WORKDIR/logs/sysbench_run_${DB_NAME}.txt 2>&1 &
+	DB_NAME="${DB_NAME}_${storage_engine}"
+    sysbench /usr/share/sysbench/oltp_read_write.lua --table-size=10000 --tables=16 --mysql-db=${DB_NAME} --mysql-user=root  --mysql-storage-engine=$storage_engine --threads=16 --time=1200 --events=1870000000 --db-driver=mysql --db-ps-mode=disable --mysql-socket=${i} run  > $WORKDIR/logs/sysbench_run_${DB_NAME}.txt 2>&1 &
     check_script $? "Failed to run sysbench oltp"
   done
 }
@@ -1196,8 +1375,11 @@ if [ ! -z $setup ]; then
   setup
 fi
 
-if [ ! -z $upgrade ]; then
+if [ ! -z $upgrade_server ]; then
   upgrade_server
+fi
+
+if [ ! -z $upgrade_client ]; then
   upgrade_client
 fi
 

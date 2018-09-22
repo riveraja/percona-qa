@@ -70,6 +70,14 @@ function run_ps_specific_tests() {
   fi
 }
 
+function run_postgresql_specific_tests() {
+  if [[ $tap == 1 ]] ; then
+    bats --tap ${DIRNAME}/pgsql-specific-tests.bats
+  else
+    bats ${DIRNAME}/pgsql-specific-tests.bats
+  fi
+}
+
 function run_pxc_specific_tests() {
   if [[ $tap == 1 ]] ; then
     bats --tap ${DIRNAME}/pxc-specific-tests.bats
@@ -126,6 +134,13 @@ function run_pmm_metrics_memory_check() {
   fi
 }
 
+function run_pmm_slow_log_rotation_check() {
+  if [[ $tap == 1 ]] ; then
+    bats --tap ${DIRNAME}/pmm-slow-log-rotation-tests.bats
+  else
+    bats ${DIRNAME}/pmm-slow-log-rotation-tests.bats
+  fi
+}
 # Additional functions
 function run_create_table() {
   bash ${DIRNAME}/create_table.sh $1 $2
@@ -192,6 +207,9 @@ else
   echo "OK - Skipped"
 fi
 
+echo "Running Slow Log rotation tests [PMM-2432]"
+run_pmm_slow_log_rotation_check
+
 echo "Running external exporters tests"
 setup_local_consul_exporter
 run_external_exporters_tests
@@ -216,6 +234,11 @@ fi
 if [[ $instance_t == "ps" ]]; then
   echo "Running PS specific tests"
   run_ps_specific_tests
+fi
+
+if [[ $instance_t == "pgsql" ]]; then
+  echo "Running Postgre SQL specific tests"
+  run_postgresql_specific_tests
 fi
 
 

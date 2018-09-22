@@ -67,7 +67,7 @@ if [[ $PXC -eq 0 && $GRP_RPL -eq 0 ]]; then
         # Look for a more generic string. Allow things like "line 1000" to match for "line 2100" (first digit match + neighbour numbers)
         SCANSTRING=$(echo "${STRING}" | sed 's|\.c[c]*|.c[c]*|;s|\( line [0-9]\)[0-9]\+|\1|')
         SCANSTRINGLASTNR=$(echo "${SCANSTRING}" | sed 's|.*\(.\)$|\1|' | sed 's|[^0-9]||')
-        if [ "${SCANSTRINGLASTNR}" == "" -o "${SCANSTRINGLASTNR}" == "0" ]; then  # The last character was not a digit, or a 0 
+        if [ "${SCANSTRINGLASTNR}" == "" -o "${SCANSTRINGLASTNR}" == "0" ]; then  # The last character was not a digit, or a 0
           grep "${SCANSTRING}" ${SCRIPT_PWD}/known_bugs.strings | sed 's|[ \t]\+| |g;s/^/  | /' | sort -u
         else
           # Scan all nearest neighbours
@@ -106,7 +106,7 @@ else
         # Look for a more generic string. Allow things like "line 1000" to match for "line 2100" (first digit match + neighbour numbers)
         SCANSTRING=$(echo "${STRING}" | sed 's|\.c[c]*|.c[c]*|;s|\( line [0-9]\)[0-9]\+|\1|')
         SCANSTRINGLASTNR=$(echo "${SCANSTRING}" | sed 's|.*\(.\)$|\1|' | sed 's|[^0-9]||')
-        if [ "${SCANSTRINGLASTNR}" == "" -o "${SCANSTRINGLASTNR}" == "0" ]; then  # The last character was not a digit, or a 0 
+        if [ "${SCANSTRINGLASTNR}" == "" -o "${SCANSTRINGLASTNR}" == "0" ]; then  # The last character was not a digit, or a 0
           grep "${SCANSTRING}" ${SCRIPT_PWD}/known_bugs.strings | sed 's|[ \t]\+| |g;s/^/  | /' | sort -u
         else
           # Scan all nearest neighbours
@@ -168,7 +168,7 @@ fi
 #   GRANT ALL ON *.* TO user3_mysqlx@localhost;
 #   > Here a timeout was set (and reached) of 10 minutes which was <=600 seconds configured in reducer.sh
 #   > To avoid the more common 600 second (10 minutes) timeouts, reducer was changed to 780 seconds default (=13 minutes)
-if [ $(ls */SHUTDOWN_TIMEOUT_ISSUE 2>/dev/null | wc -l) -gt 0 ]; then 
+if [ $(ls */SHUTDOWN_TIMEOUT_ISSUE 2>/dev/null | wc -l) -gt 0 ]; then
   COUNT=$(ls */SHUTDOWN_TIMEOUT_ISSUE 2>/dev/null | wc -l)
   STRING_OUT=`echo "* SHUTDOWN TIMEOUT >90 SEC (NO TEXT SET, MODE=0) *" | awk -F "\n" '{printf "%-55s",$1}'`
   COUNT_OUT=`echo $COUNT | awk '{printf "(Seen %3s times: reducers ",$1}'`
@@ -183,14 +183,14 @@ if [ $(ls */GONEAWAY 2>/dev/null | wc -l) -gt 0 ]; then
 fi
 
 # 'SIGKILL myself' trials
-if [ $(grep -l "SIGKILL myself" */log/master.err 2>/dev/null | wc -l) -gt 0 ]; then 
+if [ $(grep -l "SIGKILL myself" */log/master.err 2>/dev/null | wc -l) -gt 0 ]; then
   echo "--------------"
   echo "'SIGKILL myself' trials found: $(grep -l "SIGKILL myself" */log/master.err 2>/dev/null | sed 's|/.*||' | sort -un | tr '\n' ',' | sed 's|,$||')"
   echo "(> 'SIGKILL myself' trials are not handled properly yet by pquery-prep-red.sh (feel free to expand it), and cannot be filtered easily (idem). Frequency also unkwnon. pquery-run.sh has only recently (26-08-2016) been expanded to not delete these. Easiest way to handle these ftm is to set them to MODE=4 and TEXT='SIGKILL myself' in their reducer<trialnr>.sh files. Then, simply reduce as normal.)"
 fi
 
 # ASAN errors
-if [ $(grep -l "ERROR:" */log/master.err 2>/dev/null | wc -l) -gt 0 ]; then 
+if [ $(grep -l "ERROR:" */log/master.err 2>/dev/null | wc -l) -gt 0 ]; then
   echo "--------------"
   echo "ASAN trials (or other 'ERROR:' issues) found. Issues seen:"
   grep "ERROR:" */log/master.err 2>/dev/null | sed 's|/log/master.err||'
@@ -218,11 +218,21 @@ OOS1=$(grep "Out of disk space" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
 OOS2=$(grep "InnoDB: Error while writing" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
 OOS3=$(grep "bytes should have been written" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
 OOS4=$(grep "Operating system error number 28" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
-OOS5=$(ls -s */data/core* 2>/dev/null | grep -o "^ *0 [^/]\+" | awk '{print $2}' | tr '\n' ' ')
-OOS="$(echo "${OOS1} ${OOS2} ${OOS3} ${OOS4} ${OOS5}" | sed "s|  | |g")"
+OOS5=$(grep "PerconaFT No space when writing" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
+OOS6=$(grep "OS errno 28 - No space left on device" */log/master.err | sed 's|/.*||' | tr '\n' ' ')  # MySQL 8.0 message
+OOS7=$(ls -s */data/*core* 2>/dev/null | grep -o "^ *0 [^/]\+" | awk '{print $2}' | tr '\n' ' ')
+OOS="$(echo "${OOS1} ${OOS2} ${OOS3} ${OOS4} ${OOS5} ${OOS6} ${OOS7}" | sed "s|  | |g")"
 if [ "$(echo "${OOS}" | sed "s| ||g")" != "" ]; then
   echo "================ Likely out of disk space trials:"
   echo "$(echo "${OOS}" | tr ' ' '\n' | sort -nu |  tr '\n' ' ' | sed 's|$|\n|;s|^ \+||')"
+fi
+
+# Likely disk I/O issues trials
+DI1=$(grep "bytes should have been read. Only" */log/master.err | sed 's|/.*||' | tr '\n' ' ')
+DI="$(echo "${DI1}" | sed "s|  | |g")"
+if [ "$(echo "${DI}" | sed "s| ||g")" != "" ]; then
+  echo "================ Likely disk I/O issues trials (unable to read from disk etc.):"
+  echo "$(echo "${DI}" | tr ' ' '\n' | sort -nu |  tr '\n' ' ' | sed 's|$|\n|;s|^ \+||')"
 fi
 
 # Likely result of 'RELEASE' command (client connection lost resulting in pquery seeing >200 x 'MySQL server has gone away'
@@ -241,7 +251,7 @@ fi
 COREDUMPS="$(find . | grep core | grep -v parse | grep -v pquery | cut -d '/' -f2 | sort -un | tr '\n' ' ' | sed 's|$|\n|')"
 if [ "$(echo "${COREDUMPS}" | sed 's| \+||g')" != "" ]; then
   echo "================ Coredumps found in trials:"
-  find . | grep core | grep -v parse | grep -v pquery | cut -d '/' -f2 | sort -un | tr '\n' ' ' | sed 's|$|\n|'
+  find . | grep core | grep -v parse | grep -v pquery | grep -v vault | cut -d '/' -f2 | sort -un | tr '\n' ' ' | sed 's|$|\n|'
 fi
 echo "================"
 if [ `ls -l reducer* qcreducer* 2>/dev/null | awk '{print $5"|"$9}' | grep "^0|" | sed 's/^0|//' | wc -l` -gt 0 ]; then

@@ -114,6 +114,9 @@ else
   mkdir ${NODESDIR}
 fi
 
+VERSION_FULL=$(${BINDIR}/mongod --version|head -n1|sed 's/db version v//')
+VERSION_MAJOR=$(echo "${VERSION_FULL}"|grep -o '^.\..')
+
 start_mongod(){
   local NDIR="$1"
   local RS="$2"
@@ -128,6 +131,9 @@ start_mongod(){
     EXTRA="${EXTRA} --wiredTigerCacheSizeGB 1"
   elif [ "${SE}" == "rocksdb" ]; then
     EXTRA="${EXTRA} --rocksdbCacheSizeGB 1"
+    if [ "${VERSION_MAJOR}" = "3.6" ]; then
+      EXTRA="${EXTRA} --useDeprecatedMongoRocks"
+    fi
   fi
 
   mkdir -p ${NDIR}/db
@@ -169,7 +175,11 @@ start_replicaset(){
   echo "#!/usr/bin/env bash" > ${RSDIR}/init_rs.sh
   echo "echo \"Initializing replica set: ${RSNAME}\"" >> ${RSDIR}/init_rs.sh
   if [ ${RS_ARBITER} = 0 ]; then
-    echo "${BINDIR}/mongo localhost:$(($RSBASEPORT + 1)) --quiet --eval 'rs.initiate({_id:\"${RSNAME}\", members: [{\"_id\":1, \"host\":\"localhost:$(($RSBASEPORT))\"},{\"_id\":2, \"host\":\"localhost:$(($RSBASEPORT + 1))\"},{\"_id\":3, \"host\":\"localhost:$(($RSBASEPORT + 2))\"}]})'" >> ${RSDIR}/init_rs.sh
+    if [ "${STORAGE_ENGINE}" == "inMemory" ]; then
+      echo "${BINDIR}/mongo localhost:$(($RSBASEPORT + 1)) --quiet --eval 'rs.initiate({_id:\"${RSNAME}\", writeConcernMajorityJournalDefault: false, members: [{\"_id\":1, \"host\":\"localhost:$(($RSBASEPORT))\"},{\"_id\":2, \"host\":\"localhost:$(($RSBASEPORT + 1))\"},{\"_id\":3, \"host\":\"localhost:$(($RSBASEPORT + 2))\"}]})'" >> ${RSDIR}/init_rs.sh
+    else
+      echo "${BINDIR}/mongo localhost:$(($RSBASEPORT + 1)) --quiet --eval 'rs.initiate({_id:\"${RSNAME}\", members: [{\"_id\":1, \"host\":\"localhost:$(($RSBASEPORT))\"},{\"_id\":2, \"host\":\"localhost:$(($RSBASEPORT + 1))\"},{\"_id\":3, \"host\":\"localhost:$(($RSBASEPORT + 2))\"}]})'" >> ${RSDIR}/init_rs.sh
+    fi
   else
     echo "${BINDIR}/mongo localhost:$(($RSBASEPORT + 1)) --quiet --eval 'rs.initiate({_id:\"${RSNAME}\", members: [{\"_id\":1, \"host\":\"localhost:$(($RSBASEPORT))\"},{\"_id\":2, \"host\":\"localhost:$(($RSBASEPORT + 1))\"}]})'" >> ${RSDIR}/init_rs.sh
     echo "sleep 20" >> ${RSDIR}/init_rs.sh
@@ -226,6 +236,12 @@ if [ "${LAYOUT}" == "sh" ]; then
   start_mongod "${NODESDIR}/${CFGRSNAME}" "config" "${CFGPORT}" "wiredTiger" "--configsvr ${CONFIG_EXTRA}"
   echo "Initializing config server replica set: ${CFGRSNAME}"
   ${BINDIR}/mongo localhost:${CFGPORT} --quiet --eval "rs.initiate({_id:\"${CFGRSNAME}\", members: [{_id:1, \"host\":\"localhost:${CFGPORT}\"}]})"
+  # this is needed in 3.6 for MongoRocks since it doesn't support FCV 3.6 and config servers control this in sharding setup
+  if [ "${STORAGE_ENGINE}" = "rocksdb" -a "${VERSION_MAJOR}" = "3.6" ]; then
+    sleep 15
+    ${BINDIR}/mongo localhost:${CFGPORT} --quiet --eval "db.adminCommand({ setFeatureCompatibilityVersion: \"3.4\" });"
+  fi
+
   # setup 2 data replica sets
   start_replicaset "${NODESDIR}/${RS1NAME}" "${RS1NAME}" "${RS1PORT}" "--shardsvr ${MONGOD_EXTRA}"
   start_replicaset "${NODESDIR}/${RS2NAME}" "${RS2NAME}" "${RS2PORT}" "--shardsvr ${MONGOD_EXTRA}"

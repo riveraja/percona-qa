@@ -56,7 +56,7 @@ fi
 
 # Set CPU Governor to Performance. This makes sense on for example a regularly used QA server or a performance testing box
 # Consider; electricity/power and heating. To do so, see the following document especially under 'cpufreq_powersave';
-# https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/power_management_guide/cpufreq_governors 
+# https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/power_management_guide/cpufreq_governors
 # sudo cpupower frequency-set --governor performance
 # cat /sys/devices/system/cpu/intel_pstate/*  # Should read 100,100,[0]
 # cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor  # Should read "performance"
@@ -95,7 +95,8 @@ sudo yum remove pulseaudio*  # Only do this on servers, to avoid writing of puls
 #sudo apt-get install build-essential man-db wget patch make cmake automake autoconf bzr git htop lsof gdb gcc libtool bison valgrind strace screen hdparm openssl tree vim yum-utils lshw iotop bats lzma lzma-dev git linux-headers-generic g++ libncurses5-dev libaio1 libaio-dev libjemalloc1 libjemalloc-dev libdbd-mysql libperl5.24 libssl-dev subversion libgtest-dev zlib1g zlib1g-dbg zlib1g-dev libasan1 libreadline-dev libreadline6-dbg libreadline6-dev debhelper devscripts pkg-config dpkg-dev lsb-release terminator libpam0g-dev libcurl4-openssl-dev libssh-dev
 # Ubuntu 17.10
 #sudo apt-get install build-essential man-db wget patch make cmake automake autoconf bzr git htop lsof gdb gcc libtool bison valgrind strace screen hdparm openssl tree vim yum-utils lshw iotop bats lzma lzma-dev git linux-headers-generic g++ libncurses5-dev libaio1 libaio-dev libjemalloc1 libjemalloc-dev libdbd-mysql libssl-dev subversion libgtest-dev zlib1g zlib1g-dbg zlib1g-dev libreadline-dev libreadline6-dbg libreadline6-dev debhelper devscripts pkg-config dpkg-dev lsb-release terminator libpam0g-dev libcurl4-openssl-dev libssh-dev
-# Ubuntu 18.04 (same as 17.10 without libreadline6-dbg
+# Ubuntu 18.04 (same as 17.10 without libreadline6-dbg)
+# For 18.04 (Bionic) you may also want to do this; https://sites.google.com/site/easylinuxtipsproject/swappiness - use 1 instead of 10 if you have SSD disks. Basically sudo vi /etc/sysctl.conf and add this line: vm.swappiness=1 then reboot and check with cat /proc/sys/vm/swappiness
 # sudo apt-get install build-essential man-db wget patch make cmake automake autoconf bzr git htop lsof gdb gcc libtool bison valgrind strace screen hdparm openssl tree vim yum-utils lshw iotop bats lzma lzma-dev git linux-headers-generic g++ libncurses5-dev libaio1 libaio-dev libjemalloc1 libjemalloc-dev libdbd-mysql libssl-dev subversion libgtest-dev zlib1g zlib1g-dbg zlib1g-dev libreadline-dev libreadline7-dbg debhelper devscripts pkg-config dpkg-dev lsb-release terminator libpam0g-dev libcurl4-openssl-dev libssh-dev
 
 # Facebook MTR test support (https://github.com/facebook/mysql-5.6/wiki/Build-Steps)
@@ -103,7 +104,7 @@ sudo yum remove pulseaudio*  # Only do this on servers, to avoid writing of puls
 #sudo apt-get install -y libdbd-mysql libdbi-perl libdbd-mysql-perl
 
 # Bash Profile
-if [ -z "$(cat ~/.bash_profile|grep 'pshugD')" ]; then 
+if [ -z "$(cat ~/.bash_profile|grep 'pshugD')" ]; then
   echo 'alias tree="tree -pshugD"' >> ~/.bash_profile
 fi
 if ! egrep -qi "CDPATH=" ~/.bash_profile; then
@@ -112,7 +113,7 @@ fi
 
 # GDB Script
 touch ~/.gdbinit
-if [ -z "$(cat ~/.gdbinit|grep 'print elements')" ]; then cat << EOF > ~/.gdbinit 
+if [ -z "$(cat ~/.gdbinit|grep 'print elements')" ]; then cat << EOF > ~/.gdbinit
 # Next line avoids libary loading issues/manual work, see: bash$ info "(gdb)Auto-loading safe path" (do not add anything after "/" on next line, even comments)
 set auto-load safe-path /
 # [Temporarily/Permanently] disabled; it should not use /usr/lib/ but /lib64, and it seems to cause issues with thread debugging lib loading (warnings at start)
@@ -157,7 +158,7 @@ bind k kill
 EOF
 fi
 
-# Python (for LP API) 
+# Python (for LP API)
 sudo yum install python python-pip
 sudo pip install launchpadlib
 
@@ -198,11 +199,11 @@ fi
 if [ "$(grep -m1 '* hard stack 20480' /etc/security/limits.conf)" != '* hard stack 20480' ]; then
   sudo sh -c 'echo "* hard stack 20480" >> /etc/security/limits.conf'
 fi
-if [ "$(grep -m1 '* soft nproc 20480' /etc/security/limits.conf)" != '* soft nproc 1048576' ]; then  # Previously; 1048576. May cause system hangs on Centos7?
-  sudo sh -c 'echo "* soft nproc 20480" >> /etc/security/limits.conf'
+if [ "$(grep -m1 '* soft nproc 300000' /etc/security/limits.conf)" != '* soft nproc 300000' ]; then  # Previously; 1048576. May cause system hangs on Centos7? Was then reduced to 20480. Readjusted to 300000 as it seems that (in Bionic) the number of processes allowed accross various opened shells is cumulative. 
+  sudo sh -c 'echo "* soft nproc 300000" >> /etc/security/limits.conf'
 fi
-if [ "$(grep -m1 '* hard nproc 20480' /etc/security/limits.conf)" != '* hard nproc 1048576' ]; then  # Previously; 1048576. May cause system hangs on Centos7?
-  sudo sh -c 'echo "* hard nproc 20480" >> /etc/security/limits.conf'
+if [ "$(grep -m1 '* hard nproc 300000' /etc/security/limits.conf)" != '* hard nproc 300000' ]; then  # Previously; 1048576. May cause system hangs on Centos7? Was then reduced to 20480. Readjusted to 300000 as it seems that (in Bionic) the number of processes allowed accross various opened shells is cumulative. 
+  sudo sh -c 'echo "* hard nproc 300000" >> /etc/security/limits.conf'
 fi
 #if [ "$(grep -m1 '* soft memlock 128' /etc/security/limits.conf)" != '* soft memlock 128' ]; then  # May cause system hangs on Centos7?
 #  sudo sh -c 'echo "* soft memlock 128" >> /etc/security/limits.conf'

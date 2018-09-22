@@ -7,7 +7,7 @@
 # Query correctness: data (output) correctness (QC DC) trial handling was also added 11 May 2016
 
 # Improvement ideas
-# - It would be better if failing queries were added like this; 3x{query_from_err_log,query_from_core},3{SELECT 1} instead of 3{query_from_core},3{query_from_err_log},3{SELECT 1}
+# - It would be better if failing queries were added like this; 3x{query_from_err_log,query_from_core},3{SELECT 1},3{SELECT SLEEP(5)} instead of 3{query_from_core},3{query_from_err_log},3{SELECT 1},3{SELECT SLEEP(5)}
 
 # User configurable variables
 VALGRIND_OVERRIDE=0    # If set to 1, Valgrind issues are handled as if they were a crash (core dump required)
@@ -16,8 +16,6 @@ VALGRIND_OVERRIDE=0    # If set to 1, Valgrind issues are handled as if they wer
 SCRIPT_PWD=$(cd `dirname $0` && pwd)
 WORKD_PWD=$PWD
 REDUCER="${SCRIPT_PWD}/reducer.sh"
-DOCKER_COMPOSE_YML="`grep '^[ \t]*DOCKER_COMPOSE_YML[ \t]*=[ \t]*' ${SCRIPT_PWD}/pquery-run.sh | sed 's|^[ \t]*DOCKER_COMPOSE_YML[ \t]*=[ \t]*[ \t]*||' | sed 's|${SCRIPT_PWD}||'`"
-DOCKER_COMPOSE_LOC="`grep '^[ \t]*DOCKER_COMPOSE_LOC[ \t]*=[ \t]*' ${SCRIPT_PWD}/pquery-run.sh | sed 's|^[ \t]*DOCKER_COMPOSE_LOC[ \t]*=[ \t]*[ \t]*||' | sed 's|${SCRIPT_PWD}||'`"
 
 # Check if this is a pxc run
 if [ "$(grep 'PXC Mode:' ./pquery-run.log 2> /dev/null | sed 's|^.*PXC Mode[: \t]*||' )" == "TRUE" ]; then
@@ -79,7 +77,7 @@ fi
 
 NEW_MYEXTRA_METHOD=0
 if [ `ls ./*/MYEXTRA* 2>/dev/null | wc -l` -gt 0 ]; then  # New MYEXTRA/MYSAFE variables pass & VALGRIND run check method as of 2015-07-28 (MYSAFE & MYEXTRA stored in a text file inside the trial dir, VALGRIND file created if used). All settings will be set automatically for each trial (and can be checked in the output of this script)
-  NEW_MYEXTRA_METHOD=1  
+  NEW_MYEXTRA_METHOD=1
   MYEXTRA=
   VALGRIND_CHECK=0
 elif [ `ls ./pquery-run.log 2>/dev/null | wc -l` -eq 0 ]; then  # Older (backward compatible) methods for retrieving MYEXTRA/MYSAFE
@@ -147,9 +145,20 @@ if [ "${PQUERY_BIN}" == "" ]; then
   exit 1
 fi
 
+check_if_startup_failure(){  # This function may not be 100% compatible with multi-threaded (MULTI=1) yet (though an attempt was made with the [0-9] regex, ref the MULTI one above which has [1-9] but here we're checking for any startup failure and that would only happen if startup_failure_thread-0.sql is present. Then again, pquery-run.sh may not rename a file correctly to something like startup_failure_thread-{threadnr}.sql - to be verified also. < some TODO's. This function works fine for single thread runs. Multi-thread runs untested. May or may not work as described. Feel free to improve and then remove this note.
+  STARTUP_ISSUE=0
+  echo "* Checking if this trial had a mysqld startup failure"
+  if [ `ls ${TRIAL}/*startup_failure_thread-[0-9]*.sql 2>/dev/null | wc -l` -gt 0 ]; then
+    echo "  > This trial had a mysqld startup failure, the trial's reducer will be set to reduce as such (using REDUCE_STARTUP_ISSUES=1)"
+    STARTUP_ISSUE=1
+  else
+    echo "  > This trial is not marked by a mysqld startup failure"
+  fi
+}
+
 extract_queries_core(){
   echo "* Obtaining quer(y)(ies) from the trial's coredump (core: ${CORE})"
-  . ${SCRIPT_PWD}/pquery-failing-sql.sh ${TRIAL} 1
+  . ${SCRIPT_PWD}/pquery-failing-sql.sh ${TRIAL} 1  # The leading dot and space (and note it should not read ./) is signficant - it means "source" this script, ref bash manual for more information
   if [ "${MULTI}" == "1" ]; then
     CORE_FAILURE_COUNT=`cat ${WORKD_PWD}/${TRIAL}/${TRIAL}.sql.failing | wc -l`
     echo "  > $[ $CORE_FAILURE_COUNT ] quer(y)(ies) added with interleave sql function to the SQL trace"
@@ -163,7 +172,7 @@ extract_queries_core(){
     rm -Rf ${WORKD_PWD}/${TRIAL}/${TRIAL}.sql.failing
   fi
 }
-  
+
 extract_queries_error_log(){
   # Extract the "Query:" crashed query from the error log (making sure we have the 'Query:' one at the end)
   echo "* Obtaining quer(y)(ies) from the trial's mysqld error log (if any)"
@@ -190,6 +199,15 @@ add_select_ones_to_trace(){  # Improve issue reproducibility by adding 3x SELECT
     echo "SELECT 1;" >> ${INPUTFILE}
   done
   echo "  > 'SELECT 1;' query added 3x to the SQL trace"
+}
+
+add_select_sleep_to_trace(){  # Improve issue reproducibility by adding 2x SELECT SLEEP(5); to the sql trace
+  echo "* Adding additional 'SELECT SLEEP(5);' queries to improve issue reproducibility"
+  if [ ! -f ${INPUTFILE} ]; then touch ${INPUTFILE}; fi
+  for i in {1..3}; do
+    echo "SELECT SLEEP(5);" >> ${INPUTFILE}
+  done
+  echo "  > 'SELECT SLEEP(5);' query added 2x to the SQL trace"
 }
 
 remove_non_sql_from_trace(){
@@ -227,7 +245,7 @@ auto_interleave_failing_sql(){
 }
 
 generate_reducer_script(){
-  if [ "${BASE}" == "" ]; then 
+  if [ "${BASE}" == "" ]; then
     echo "Assert! \$BASE is empty at start of generate_reducer_script()"
     exit 1
   fi
@@ -260,10 +278,10 @@ generate_reducer_script(){
     fi
     TEXT_CLEANUP="0,/^[ \t]*TEXT[ \t]*=.*$/s|^[ \t]*TEXT[ \t]*=.*$|#TEXT=<set_below_in_machine_variables_section>|"
     TEXT_STRING1="0,/#VARMOD#/s:#VARMOD#:# IMPORTANT NOTE; Leave the 3 spaces before TEXT on the next line; pquery-results.sh uses these\n#VARMOD#:"
-    if [[ "${TEXT}" = *":"* ]]; then 
-      if [[ "${TEXT}" = *"|"* ]]; then 
-        if [[ "${TEXT}" = *"/"* ]]; then 
-          if [[ "${TEXT}" = *"_"* ]]; then 
+    if [[ "${TEXT}" = *":"* ]]; then
+      if [[ "${TEXT}" = *"|"* ]]; then
+        if [[ "${TEXT}" = *"/"* ]]; then
+          if [[ "${TEXT}" = *"_"* ]]; then
             if [[ "${TEXT}" = *"-"* ]]; then
               echo "Assert (#1)! No suitable sed seperator found. TEXT (${TEXT}) contains all of the possibilities, add more!"
             else
@@ -311,9 +329,9 @@ generate_reducer_script(){
     MYEXTRA_STRING1="s|ZERO0|ZERO0|"  # Idem as above
   else  # MYEXTRA specifically set
     MYEXTRA_CLEANUP="0,/^[ \t]*MYEXTRA[ \t]*=.*$/s|^[ \t]*MYEXTRA[ \t]*=.*$|#MYEXTRA=<set_below_in_machine_variables_section>|"
-    if [[ "${MYEXTRA}" = *":"* ]]; then 
-      if [[ "${MYEXTRA}" = *"|"* ]]; then 
-        if [[ "${MYEXTRA}" = *"!"* ]]; then 
+    if [[ "${MYEXTRA}" = *":"* ]]; then
+      if [[ "${MYEXTRA}" = *"|"* ]]; then
+        if [[ "${MYEXTRA}" = *"!"* ]]; then
           echo "Assert! No suitable sed seperator found. MYEXTRA (${MYEXTRA}) contains all of the possibilities, add more!"
         else
           MYEXTRA_STRING1="0,/#VARMOD#/s!#VARMOD#!MYEXTRA=\"${MYEXTRA}\"\n#VARMOD#!"
@@ -347,21 +365,21 @@ generate_reducer_script(){
     MULTI_STRING2="0,/#VARMOD#/s:#VARMOD#:FORCE_SKIPV=1\n#VARMOD#:"
     MULTI_STRING3="0,/#VARMOD#/s:#VARMOD#:FORCE_SPORADIC=1\n#VARMOD#:"
   fi
-  if [ ${PXC} -eq 1 ]; then
+  if [[ ${PXC} -eq 1 ]]; then
     PXC_CLEANUP1="0,/^[ \t]*PXC_MOD[ \t]*=.*$/s|^[ \t]*PXC_MOD[ \t]*=.*$|#PXC_MOD=<set_below_in_machine_variables_section>|"
     PXC_STRING1="0,/#VARMOD#/s:#VARMOD#:PXC_MOD=1\n#VARMOD#:"
   else
     PXC_CLEANUP1="s|ZERO0|ZERO0|"  # Idem as above
     PXC_STRING1="s|ZERO0|ZERO0|"
   fi
-  if [ ${GRP_RPL} -eq 1 ]; then
+  if [[ ${GRP_RPL} -eq 1 ]]; then
     GRP_RPL_CLEANUP1="0,/^[ \t]*GRP_RPL_MOD[ \t]*=.*$/s|^[ \t]*GRP_RPL_MOD[ \t]*=.*$|#GRP_RPL_MOD=<set_below_in_machine_variables_section>|"
     GRP_RPL_STRING1="0,/#VARMOD#/s:#VARMOD#:GRP_RPL_MOD=1\n#VARMOD#:"
   else
     GRP_RPL_CLEANUP1="s|ZERO0|ZERO0|"  # Idem as above
     GRP_RPL_STRING1="s|ZERO0|ZERO0|"
   fi
-  if [ ${QC} -eq 0 ]; then
+  if [[ ${QC} -eq 0 ]]; then
     REDUCER_FILENAME=reducer${OUTFILE}.sh
     QC_STRING1="s|ZERO0|ZERO0|"
     QC_STRING2="s|ZERO0|ZERO0|"
@@ -373,6 +391,13 @@ generate_reducer_script(){
     QC_STRING2="s|REALLINE=2|REALLINE=5|g"
     QC_STRING3="0,/#VARMOD#/s:#VARMOD#:QCTEXT=\"${QCTEXT}\"\n#VARMOD#:"
     QC_STRING4="s|SKIPSTAGEABOVE=9|SKIPSTAGEABOVE=3|"
+  fi
+  if [[ ${STARTUP_ISSUE} -eq 0 ]]; then
+    SI_CLEANUP1="s|ZERO0|ZERO0|"
+    SI_STRING1="s|ZERO0|ZERO0|"
+  else
+    SI_CLEANUP1="0,/^[ \t]*REDUCE_STARTUP_ISSUES[ \t]*=.*$/s|^[ \t]*REDUCE_STARTUP_ISSUES[ \t]*=.*$|#REDUCE_STARTUP_ISSUES=<set_below_in_machine_variables_section>|"
+    SI_STRING1="0,/#VARMOD#/s:#VARMOD#:REDUCE_STARTUP_ISSUES=1\n#VARMOD#:"
   fi
   cat ${REDUCER} \
    | sed -e "0,/^[ \t]*INPUTFILE[ \t]*=.*$/s|^[ \t]*INPUTFILE[ \t]*=.*$|#INPUTFILE=<set_below_in_machine_variables_section>|" \
@@ -391,6 +416,8 @@ generate_reducer_script(){
    | sed -e "0,/^[ \t]*PQUERY_LOC[ \t]*=.*$/s|^[ \t]*PQUERY_LOC[ \t]*=.*$|#PQUERY_LOC=<set_below_in_machine_variables_section>|" \
    | sed -e "${PXC_CLEANUP1}" \
    | sed -e "${GRP_RPL_CLEANUP1}" \
+   | sed -e "${SI_CLEANUP1}" \
+   | sed -e "${SI_STRING1}" \
    | sed -e "0,/#VARMOD#/s:#VARMOD#:MODE=${MODE}\n#VARMOD#:" \
    | sed -e "0,/#VARMOD#/s:#VARMOD#:DISABLE_TOKUDB_AUTOLOAD=${DISABLE_TOKUDB_AUTOLOAD}\n#VARMOD#:" \
    | sed -e "${TEXT_STRING1}" \
@@ -418,7 +445,7 @@ generate_reducer_script(){
 # Main pquery results processing
 if [ ${QC} -eq 0 ]; then
   if [[ ${PXC} -eq 1 || ${GRP_RPL} -eq 1 ]]; then
-    for TRIAL in $(ls ./*/node*/core* 2>/dev/null | sed 's|./||;s|/.*||' | sort | sort -u); do
+    for TRIAL in $(ls ./*/node*/*core* 2>/dev/null | sed 's|./||;s|/.*||' | sort | sort -u); do
       for SUBDIR in `ls -lt ${TRIAL} --time-style="long-iso"  | egrep --binary-files=text '^d' | awk '{print $8}' | tr -dc '0-9\n' | sort`; do
         OUTFILE="${TRIAL}-${SUBDIR}"
         rm -Rf  ${WORKD_PWD}/${TRIAL}/${TRIAL}.sql.failing
@@ -470,6 +497,7 @@ if [ ${QC} -eq 0 ]; then
           fi
         fi
         add_select_ones_to_trace
+        add_select_sleep_to_trace
         remove_non_sql_from_trace
         TEXT=`${SCRIPT_PWD}/text_string.sh ./${TRIAL}/node${SUBDIR}/node${SUBDIR}.err`
         echo "* TEXT variable set to: \"${TEXT}\""
@@ -489,6 +517,7 @@ if [ ${QC} -eq 0 ]; then
       if [[ ${VALGRIND_CHECK} -eq 1 ]]; then
         echo "* Valgrind was used for this trial"
       fi
+      echo "Trial analysis complete. Reducer created: ${PWD}/reducer${TRIAL}-${SUBDIR}.sh"
     done
   else
     for SQLLOG in $(ls ./*/*thread-0.sql 2>/dev/null); do
@@ -517,8 +546,8 @@ if [ ${QC} -eq 0 ]; then
         else
           INPUTFILE=`echo ${SQLLOG} | sed "s|^[./]\+|/|;s|^|${WORKD_PWD}|"`
         fi
-        BIN=$(grep "\/mysqld" ./${TRIAL}/start | head -n1 | sed 's|mysqld .*|mysqld|;s|.* \(.*bin/mysqld\)|\1|') 
-        if [ "${BIN}" == "" ]; then 
+        BIN=$(grep "\/mysqld" ./${TRIAL}/start | head -n1 | sed 's|mysqld .*|mysqld|;s|.* \(.*bin/mysqld\)|\1|')
+        if [ "${BIN}" == "" ]; then
           echo "Assert \$BIN is empty for trial $TRIAL, please fix this trial manually"
           continue
         fi
@@ -543,13 +572,16 @@ if [ ${QC} -eq 0 ]; then
           exit 1
         fi
         add_select_ones_to_trace
+        add_select_sleep_to_trace
         remove_non_sql_from_trace
+        # Check if this trial was/had a startup failure (which would take priority over anything else) - will be used to set REDUCE_STARTUP_ISSUES=1
+        check_if_startup_failure
         VALGRIND_CHECK=0
         VALGRIND_ERRORS_FOUND=0; VALGRIND_CHECK_1=
         if [ -r ./${TRIAL}/VALGRIND -a ${VALGRIND_OVERRIDE} -ne 1 ]; then
           VALGRIND_CHECK=1
           # What follows are 3 different ways of checking if Valgrind issues were seen, mostly to ensure that no Valgrind issues go unseen, especially if log is not complete
-          VALGRIND_CHECK_1=$(grep "==[0-9]\+== ERROR SUMMARY: [0-9]\+ error" ./${TRIAL}/log/master.err | sed 's|.*ERROR SUMMARY: \([0-9]\+\) error.*|\1|')
+          VALGRIND_CHECK_1=$(grep --binary-files=text "==[0-9]\+== ERROR SUMMARY: [0-9]\+ error" ./${TRIAL}/log/master.err | sed 's|.*ERROR SUMMARY: \([0-9]\+\) error.*|\1|')
           if [ "${VALGRIND_CHECK_1}" == "" ]; then VALGRIND_CHECK_1=0; fi
           if [ ${VALGRIND_CHECK_1} -gt 0 ]; then
             VALGRIND_ERRORS_FOUND=1
@@ -595,8 +627,8 @@ if [ ${QC} -eq 0 ]; then
   fi
 else
   for TRIAL in $(ls ./*/diff.result 2>/dev/null | sed 's|./||;s|/.*||'); do
-    BIN=$(grep "\/mysqld" ./${TRIAL}/start | head -n1 | sed 's|mysqld .*|mysqld|;s|.* \(.*bin/mysqld\)|\1|') 
-    if [ "${BIN}" == "" ]; then 
+    BIN=$(grep "\/mysqld" ./${TRIAL}/start | head -n1 | sed 's|mysqld .*|mysqld|;s|.* \(.*bin/mysqld\)|\1|')
+    if [ "${BIN}" == "" ]; then
       echo "Assert \$BIN is empty"
       exit 1
     fi
@@ -609,7 +641,7 @@ else
       echo "Assert! Basedir '${BASE}' does not look to be a directory"
       exit 1
     fi
-    TEXT=$(grep "^[<>]" ./${TRIAL}/diff.result | awk '{print length, $0;}' | sort -nr | head -n1 | sed 's/^[0-9]\+[ \t]\+//')
+    TEXT=$(grep --binary-files=text "^[<>]" ./${TRIAL}/diff.result | awk '{print length, $0;}' | sort -nr | head -n1 | sed 's/^[0-9]\+[ \t]\+//')
     LEFTRIGHT=$(echo ${TEXT} | sed 's/\(^.\).*/\1/')
     TEXT=$(echo ${TEXT} | sed 's/[<>][ \t]\+//')
     ENGINE=
@@ -629,9 +661,9 @@ else
       FAULT=1
     fi
     if [ ${FAULT} -ne 1 ]; then
-      QCTEXTLN=$(echo "${TEXT}" | grep -o "[0-9]*$")
+      QCTEXTLN=$(echo "${TEXT}" | grep --binary-files=text -o "[0-9]*$")
       TEXT=$(echo ${TEXT} | sed "s/#[0-9]*$//")
-      QCTEXT=$(sed -n "${QCTEXTLN},${QCTEXTLN}p" ${WORKD_PWD}/${TRIAL}/*_thread-0.${ENGINE}.sql | grep -o "#@[0-9]*#")
+      QCTEXT=$(sed -n "${QCTEXTLN},${QCTEXTLN}p" ${WORKD_PWD}/${TRIAL}/*_thread-0.${ENGINE}.sql | grep --binary-files=text -o "#@[0-9]*#")
     fi
     # Output of the following is too verbose
     #if [ "${MYEXTRA}" != "" ]; then
@@ -649,7 +681,7 @@ else
 fi
 
 # Process shutdown timeout issues correctly
-# * The "grep -H "^MODE=4$" reducer*" ensures that we have only reducers which were not otherwise recognized 
+# * The "grep -H "^MODE=4$" reducer*" ensures that we have only reducers which were not otherwise recognized
 # * Checking for a coredump ensures that there was no coredump found in the trial's directory
 # * The check for ${MATCHING_TRIAL}/SHUTDOWN_TIMEOUT_ISSUE ensures that the issue was a shutdown issue
 # If these 3 all apply, it is safe to change the MODE to =0 and assume that this is a shutdown issue only
